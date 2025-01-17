@@ -9,7 +9,7 @@ import (
 	"github.com/reviewdog/reviewdog/proto/rdf"
 )
 
-// `path` to `position`(Lnum for new file) to comment `body` or `finterprint`
+// `path` to `position`(Lnum for new file) to comment `body` or `fingerprint`
 type PostedComments map[string]map[int][]string
 
 // IsPosted returns true if a given comment has been posted in code review service already,
