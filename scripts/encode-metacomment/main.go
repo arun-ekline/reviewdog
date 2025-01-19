@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/reviewdog/reviewdog/service/github"
+	"github.com/reviewdog/reviewdog/service/commentutil"
 )
 
 var fprint = flag.String("fprint", "", "fingerprint")
@@ -17,5 +17,5 @@ func main() {
 		fmt.Println("Set both -fprint and -tool-name flags")
 		os.Exit(1)
 	}
-	fmt.Println(github.BuildMetaComment(*fprint, *toolName))
+	fmt.Println(commentutil.BuildMetaComment(*fprint, *toolName))
 }

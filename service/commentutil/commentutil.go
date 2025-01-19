@@ -1,12 +1,15 @@
 package commentutil
 
 import (
+	"encoding/base64"
 	"fmt"
 	"log"
 	"strings"
 
 	"github.com/reviewdog/reviewdog"
+	"github.com/reviewdog/reviewdog/proto/metacomment"
 	"github.com/reviewdog/reviewdog/proto/rdf"
+	"google.golang.org/protobuf/proto"
 )
 
 // `path` to `position`(Lnum for new file) to comment `body` or `fingerprint`
@@ -95,4 +98,47 @@ func severity(c *reviewdog.Comment) string {
 	default:
 		return ""
 	}
+}
+
+func BuildMetaComment(fprint string, toolName string) string {
+	b, _ := proto.Marshal(
+		&metacomment.MetaComment{
+			Fingerprint: fprint,
+			SourceName:  toolName,
+		},
+	)
+	return base64.StdEncoding.EncodeToString(b)
+}
+
+func ExtractMetaComment(body string) *metacomment.MetaComment {
+	prefix := "<!-- __reviewdog__:"
+	for _, line := range strings.Split(body, "\n") {
+		if after, found := strings.CutPrefix(line, prefix); found {
+			if metastring, foundSuffix := strings.CutSuffix(after, " -->"); foundSuffix {
+				meta, err := DecodeMetaComment(metastring)
+				if err != nil {
+					log.Printf("failed to decode MetaComment: %v", err)
+					continue
+				}
+				return meta
+			}
+		}
+	}
+	return nil
+}
+
+func DecodeMetaComment(metaBase64 string) (*metacomment.MetaComment, error) {
+	b, err := base64.StdEncoding.DecodeString(metaBase64)
+	if err != nil {
+		return nil, err
+	}
+	meta := &metacomment.MetaComment{}
+	if err := proto.Unmarshal(b, meta); err != nil {
+		return nil, err
+	}
+	return meta, nil
+}
+
+func MetaCommentTag(fprint string, toolName string) string {
+	return fmt.Sprintf("\n<!-- __reviewdog__:%s -->\n", BuildMetaComment(fprint, toolName))
 }
