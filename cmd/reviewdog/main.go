@@ -349,7 +349,7 @@ func run(r io.Reader, w io.Writer, opt *option) error {
 			return nil
 		}
 
-		gc, err := gitlabservice.NewGitLabMergeRequestDiscussionCommenter(cli, build.Owner, build.Repo, build.PullRequest, build.SHA)
+		gc, err := gitlabservice.NewGitLabMergeRequestDiscussionCommenter(cli, build.Owner, build.Repo, build.PullRequest, build.SHA, toolName(opt))
 		if err != nil {
 			return err
 		}

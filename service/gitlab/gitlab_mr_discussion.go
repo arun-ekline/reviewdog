@@ -33,6 +33,7 @@ type MergeRequestDiscussionCommenter struct {
 	pr       int
 	sha      string
 	projects string
+	toolName string
 
 	muComments   sync.Mutex
 	postComments []*reviewdog.Comment
@@ -43,7 +44,7 @@ type MergeRequestDiscussionCommenter struct {
 
 // NewGitLabMergeRequestDiscussionCommenter returns a new MergeRequestDiscussionCommenter service.
 // MergeRequestDiscussionCommenter service needs git command in $PATH.
-func NewGitLabMergeRequestDiscussionCommenter(cli *gitlab.Client, owner, repo string, pr int, sha string) (*MergeRequestDiscussionCommenter, error) {
+func NewGitLabMergeRequestDiscussionCommenter(cli *gitlab.Client, owner, repo string, pr int, sha string, toolName string) (*MergeRequestDiscussionCommenter, error) {
 	workDir, err := serviceutil.GitRelWorkdir()
 	if err != nil {
 		return nil, fmt.Errorf("MergeRequestDiscussionCommenter needs 'git' command: %w", err)
@@ -54,6 +55,7 @@ func NewGitLabMergeRequestDiscussionCommenter(cli *gitlab.Client, owner, repo st
 		sha:      sha,
 		projects: owner + "/" + repo,
 		wd:       workDir,
+		toolName: toolName,
 	}, nil
 }
 
@@ -119,7 +121,7 @@ func (g *MergeRequestDiscussionCommenter) postCommentsForEach(ctx context.Contex
 		if err != nil {
 			return err
 		}
-		body := buildBody(c, fprint)
+		body := buildBody(c, fprint, g.toolName)
 
 		if !c.Result.InDiffFile || lnum == 0 || postedcs.IsPosted(c, lnum, fprint) {
 			continue
@@ -170,12 +172,12 @@ func listAllMergeRequestDiscussion(cli *gitlab.Client, projectID string, mergeRe
 	return append(discussions, restDiscussions...), nil
 }
 
-func buildBody(c *reviewdog.Comment, fprint string) string {
+func buildBody(c *reviewdog.Comment, fprint string, toolName string) string {
 	body := commentutil.MarkdownComment(c)
 	if suggestion := buildSuggestions(c); suggestion != "" {
 		body = body + "\n\n" + suggestion
 	}
-	body += commentutil.MetaCommentTag(fprint, c.ToolName)
+	body += commentutil.MetaCommentTag(fprint, toolName)
 	return body
 }
 

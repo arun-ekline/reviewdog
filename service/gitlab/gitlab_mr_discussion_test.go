@@ -315,7 +315,7 @@ func TestGitLabMergeRequestDiscussionCommenter_Post_Flush_review_api(t *testing.
 		t.Fatal(err)
 	}
 
-	g, err := NewGitLabMergeRequestDiscussionCommenter(cli, "o", "r", 14, "sha")
+	g, err := NewGitLabMergeRequestDiscussionCommenter(cli, "o", "r", 14, "sha", "tool-name")
 	if err != nil {
 		t.Fatal(err)
 	}
