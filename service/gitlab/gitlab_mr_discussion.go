@@ -37,6 +37,8 @@ type MergeRequestDiscussionCommenter struct {
 
 	muComments   sync.Mutex
 	postComments []*reviewdog.Comment
+	// rename to outdatedDiscussions
+	outdatedDiscussions map[string]*gitlab.Discussion // fingerprint -> discussion
 
 	// wd is working directory relative to root of repository.
 	wd string
@@ -74,7 +76,11 @@ func (g *MergeRequestDiscussionCommenter) Post(_ context.Context, c *reviewdog.C
 func (g *MergeRequestDiscussionCommenter) Flush(ctx context.Context) error {
 	g.muComments.Lock()
 	defer g.muComments.Unlock()
-	defer func() { g.postComments = nil }()
+	defer func() {
+		g.postComments = nil
+		g.outdatedDiscussions = nil
+	}()
+	g.outdatedDiscussions = make(map[string]*gitlab.Discussion)
 	postedcs, err := g.createPostedComments()
 	if err != nil {
 		return fmt.Errorf("failed to create posted comments: %w", err)
@@ -96,6 +102,9 @@ func (g *MergeRequestDiscussionCommenter) createPostedComments() (commentutil.Po
 			}
 			if meta := commentutil.ExtractMetaComment(note.Body); meta != nil {
 				postedcs.AddPostedComment(pos.NewPath, pos.NewLine, meta.GetFingerprint())
+				if meta.SourceName == g.toolName {
+					g.outdatedDiscussions[meta.GetFingerprint()] = d // Non-outdated discussions are removed from this map later.
+				}
 			}
 		}
 	}
@@ -146,6 +155,24 @@ func (g *MergeRequestDiscussionCommenter) postCommentsForEach(ctx context.Contex
 			_, _, err := g.cli.Discussions.CreateMergeRequestDiscussion(g.projects, g.pr, discussion)
 			if err != nil {
 				return fmt.Errorf("failed to create merge request discussion: %w", err)
+			}
+			return nil
+		})
+	}
+	err = eg.Wait()
+	if err != nil {
+		return err
+	}
+
+	for _, d := range g.outdatedDiscussions {
+		d := d
+		if len(d.Notes) > 1 {
+			// Do not remove comment with replies.
+			continue
+		}
+		eg.Go(func() error {
+			if _, err := g.cli.Discussions.DeleteMergeRequestDiscussionNote(g.projects, g.pr, d.ID, d.Notes[0].ID); err != nil {
+				return fmt.Errorf("failed to delete discussion (id=%s): %w", d.ID, err)
 			}
 			return nil
 		})

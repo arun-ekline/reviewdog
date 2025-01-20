@@ -160,7 +160,9 @@ func TestGitLabMergeRequestDiscussionCommenter_Post_Flush_review_api(t *testing.
 		commentWithoutLnum,
 		newCommentWithSuggestion,
 	}
+	var deleteCalled int32
 	var postCalled int32
+	const wantDeleteCalled = 1
 	const wantPostCalled = 4
 
 	mux := http.NewServeMux()
@@ -171,9 +173,10 @@ func TestGitLabMergeRequestDiscussionCommenter_Post_Flush_review_api(t *testing.
 			default:
 				dls := []*gitlab.Discussion{
 					{
+						ID: "d1",
 						Notes: []*gitlab.Note{
 							{
-								Body: commentutil.MarkdownComment(alreadyCommented1) + "\n<!-- __reviewdog__:ChBiY2RjN2IyZTUxNTQwNGZm -->\n",
+								Body: commentutil.MarkdownComment(alreadyCommented1) + "\n<!-- __reviewdog__:ChBiY2RjN2IyZTUxNTQwNGZmEgl0b29sLW5hbWU= -->\n",
 								Position: &gitlab.NotePosition{
 									NewPath: alreadyCommented1.Result.Diagnostic.GetLocation().GetPath(),
 									NewLine: int(alreadyCommented1.Result.Diagnostic.GetLocation().GetRange().GetStart().GetLine()),
@@ -196,9 +199,11 @@ func TestGitLabMergeRequestDiscussionCommenter_Post_Flush_review_api(t *testing.
 			case "2":
 				dls := []*gitlab.Discussion{
 					{
+						ID: "d2",
 						Notes: []*gitlab.Note{
 							{
-								Body: commentutil.MarkdownComment(alreadyCommented2) + "\n<!-- __reviewdog__:ChA1OTA5MDQxOTczMDYyODI2 -->\n",
+								ID:   1,
+								Body: commentutil.MarkdownComment(alreadyCommented2) + "\n<!-- __reviewdog__:ChA1OTA5MDQxOTczMDYyODI2Egl0b29sLW5hbWU= -->\n",
 								Position: &gitlab.NotePosition{
 									NewPath: alreadyCommented2.Result.Diagnostic.GetLocation().GetPath(),
 									NewLine: int(alreadyCommented2.Result.Diagnostic.GetLocation().GetRange().GetStart().GetLine()),
@@ -294,6 +299,33 @@ func TestGitLabMergeRequestDiscussionCommenter_Post_Flush_review_api(t *testing.
 			t.Errorf("unexpected access: %v %v", r.Method, r.URL)
 		}
 	})
+	mux.HandleFunc("/api/v4/projects/o/r/merge_requests/14/discussions/d2/notes/1", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodDelete:
+			atomic.AddInt32(&deleteCalled, 1)
+			w.Write([]byte(`{}`))
+		case http.MethodGet:
+			dls := []*gitlab.Discussion{
+				{
+					Notes: []*gitlab.Note{
+						{
+							ID:   1,
+							Body: commentutil.MarkdownComment(alreadyCommented2) + "\n<!-- __reviewdog__:ChA1OTA5MDQxOTczMDYyODI2Egl0b29sLW5hbWU= -->\n",
+							Position: &gitlab.NotePosition{
+								NewPath: alreadyCommented2.Result.Diagnostic.GetLocation().GetPath(),
+								NewLine: int(alreadyCommented2.Result.Diagnostic.GetLocation().GetRange().GetStart().GetLine()),
+							},
+						},
+					},
+				},
+			}
+			if err := json.NewEncoder(w).Encode(dls); err != nil {
+				t.Fatal(err)
+			}
+		default:
+			t.Errorf("unexpected access: %v %v", r.Method, r.URL)
+		}
+	})
 	mux.HandleFunc("/api/v4/projects/o/r/merge_requests/14", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			t.Errorf("unexpected access: %v %v", r.Method, r.URL)
@@ -305,6 +337,9 @@ func TestGitLabMergeRequestDiscussionCommenter_Post_Flush_review_api(t *testing.
 			t.Errorf("unexpected access: %v %v", r.Method, r.URL)
 		}
 		w.Write([]byte(`{"commit": {"id": "xxx"}}`))
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("unexpected access: %v %v", r.Method, r.URL)
 	})
 
 	ts := httptest.NewServer(mux)
@@ -330,6 +365,9 @@ func TestGitLabMergeRequestDiscussionCommenter_Post_Flush_review_api(t *testing.
 	}
 	if postCalled != wantPostCalled {
 		t.Errorf("%d discussions posted, but want %d", postCalled, wantPostCalled)
+	}
+	if deleteCalled != wantDeleteCalled {
+		t.Errorf("%d discussions deleted, but want %d", deleteCalled, wantDeleteCalled)
 	}
 }
 
