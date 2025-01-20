@@ -8,6 +8,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// Fingerprint calculates a fingerprint for use in a metacomment.
 func Fingerprint(d *rdf.Diagnostic) (string, error) {
 	h := fnv.New64a()
 	// Ideally, we should not use proto.Marshal since Proto Serialization Is Not

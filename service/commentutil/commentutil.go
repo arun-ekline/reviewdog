@@ -12,7 +12,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// `path` to `position`(Lnum for new file) to comment `body` or `fingerprint`
+// PostedComments is a map of `path` to `position`(Lnum for new file) to comment `body` or `fingerprint`
 type PostedComments map[string]map[int][]string
 
 // IsPosted returns true if a given comment has been posted in code review service already,
@@ -100,6 +100,7 @@ func severity(c *reviewdog.Comment) string {
 	}
 }
 
+// BuildMetaComment builds a metacomment with a fingerprint.
 func BuildMetaComment(fprint string, toolName string) string {
 	b, _ := proto.Marshal(
 		&metacomment.MetaComment{
@@ -110,6 +111,7 @@ func BuildMetaComment(fprint string, toolName string) string {
 	return base64.StdEncoding.EncodeToString(b)
 }
 
+// ExtractMetaComment extracts a meta comment from the comment body.
 func ExtractMetaComment(body string) *metacomment.MetaComment {
 	prefix := "<!-- __reviewdog__:"
 	for _, line := range strings.Split(body, "\n") {
@@ -127,6 +129,7 @@ func ExtractMetaComment(body string) *metacomment.MetaComment {
 	return nil
 }
 
+// DecodeMetaComment decodes a metacomment from a base64 encoded string.
 func DecodeMetaComment(metaBase64 string) (*metacomment.MetaComment, error) {
 	b, err := base64.StdEncoding.DecodeString(metaBase64)
 	if err != nil {
@@ -139,6 +142,7 @@ func DecodeMetaComment(metaBase64 string) (*metacomment.MetaComment, error) {
 	return meta, nil
 }
 
+// MetaCommentTag creates a HTML tag for use in a comment body.
 func MetaCommentTag(fprint string, toolName string) string {
 	return fmt.Sprintf("\n<!-- __reviewdog__:%s -->\n", BuildMetaComment(fprint, toolName))
 }
