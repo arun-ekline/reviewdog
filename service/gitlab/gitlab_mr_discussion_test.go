@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"regexp"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -172,7 +173,7 @@ func TestGitLabMergeRequestDiscussionCommenter_Post_Flush_review_api(t *testing.
 					{
 						Notes: []*gitlab.Note{
 							{
-								Body: commentutil.MarkdownComment(alreadyCommented1),
+								Body: commentutil.MarkdownComment(alreadyCommented1) + "\n<!-- __reviewdog__:ChBiY2RjN2IyZTUxNTQwNGZm -->\n",
 								Position: &gitlab.NotePosition{
 									NewPath: alreadyCommented1.Result.Diagnostic.GetLocation().GetPath(),
 									NewLine: int(alreadyCommented1.Result.Diagnostic.GetLocation().GetRange().GetStart().GetLine()),
@@ -197,7 +198,7 @@ func TestGitLabMergeRequestDiscussionCommenter_Post_Flush_review_api(t *testing.
 					{
 						Notes: []*gitlab.Note{
 							{
-								Body: commentutil.MarkdownComment(alreadyCommented2),
+								Body: commentutil.MarkdownComment(alreadyCommented2) + "\n<!-- __reviewdog__:ChA1OTA5MDQxOTczMDYyODI2 -->\n",
 								Position: &gitlab.NotePosition{
 									NewPath: alreadyCommented2.Result.Diagnostic.GetLocation().GetPath(),
 									NewLine: int(alreadyCommented2.Result.Diagnostic.GetLocation().GetRange().GetStart().GetLine()),
@@ -220,7 +221,7 @@ func TestGitLabMergeRequestDiscussionCommenter_Post_Flush_review_api(t *testing.
 			switch *got.Position.NewPath {
 			case "file.go":
 				want := &gitlab.CreateMergeRequestDiscussionOptions{
-					Body: gitlab.Ptr(commentutil.MarkdownComment(newComment1)),
+					Body: gitlab.Ptr(commentutil.MarkdownComment(newComment1) + "\n<!-- __reviewdog__:xxxxxxxxxx -->\n"),
 					Position: &gitlab.PositionOptions{
 						BaseSHA:      gitlab.Ptr("xxx"),
 						StartSHA:     gitlab.Ptr("xxx"),
@@ -230,12 +231,12 @@ func TestGitLabMergeRequestDiscussionCommenter_Post_Flush_review_api(t *testing.
 						NewLine:      gitlab.Ptr(14),
 					},
 				}
-				if diff := cmp.Diff(got, want); diff != "" {
+				if diff := diffCreateMergeRequestDiscussionOptions(got, want); diff != "" {
 					t.Error(diff)
 				}
 			case "file2.go":
 				want := &gitlab.CreateMergeRequestDiscussionOptions{
-					Body: gitlab.Ptr(commentutil.MarkdownComment(newComment2)),
+					Body: gitlab.Ptr(commentutil.MarkdownComment(newComment2) + "\n<!-- __reviewdog__:xxxxxxxxxx -->\n"),
 					Position: &gitlab.PositionOptions{
 						BaseSHA:      gitlab.Ptr("xxx"),
 						StartSHA:     gitlab.Ptr("xxx"),
@@ -245,12 +246,12 @@ func TestGitLabMergeRequestDiscussionCommenter_Post_Flush_review_api(t *testing.
 						NewLine:      gitlab.Ptr(15),
 					},
 				}
-				if diff := cmp.Diff(got, want); diff != "" {
+				if diff := diffCreateMergeRequestDiscussionOptions(got, want); diff != "" {
 					t.Error(diff)
 				}
 			case "new_file.go":
 				want := &gitlab.CreateMergeRequestDiscussionOptions{
-					Body: gitlab.Ptr(commentutil.MarkdownComment(newComment3)),
+					Body: gitlab.Ptr(commentutil.MarkdownComment(newComment3) + "\n<!-- __reviewdog__:xxxxxxxxxx -->\n"),
 					Position: &gitlab.PositionOptions{
 						BaseSHA:      gitlab.Ptr("xxx"),
 						StartSHA:     gitlab.Ptr("xxx"),
@@ -262,7 +263,7 @@ func TestGitLabMergeRequestDiscussionCommenter_Post_Flush_review_api(t *testing.
 						OldLine:      gitlab.Ptr(7),
 					},
 				}
-				if diff := cmp.Diff(got, want); diff != "" {
+				if diff := diffCreateMergeRequestDiscussionOptions(got, want); diff != "" {
 					t.Error(diff)
 				}
 			case "file3.go":
@@ -270,7 +271,7 @@ func TestGitLabMergeRequestDiscussionCommenter_Post_Flush_review_api(t *testing.
 				bodyExpected := commentutil.MarkdownComment(newCommentWithSuggestion) + "\n\n" + suggestions
 
 				want := &gitlab.CreateMergeRequestDiscussionOptions{
-					Body: gitlab.Ptr(bodyExpected),
+					Body: gitlab.Ptr(bodyExpected + "\n<!-- __reviewdog__:xxxxxxxxxx -->\n"),
 					Position: &gitlab.PositionOptions{
 						BaseSHA:      gitlab.Ptr("xxx"),
 						StartSHA:     gitlab.Ptr("xxx"),
@@ -280,7 +281,7 @@ func TestGitLabMergeRequestDiscussionCommenter_Post_Flush_review_api(t *testing.
 						NewLine:      gitlab.Ptr(14),
 					},
 				}
-				if diff := cmp.Diff(got, want); diff != "" {
+				if diff := diffCreateMergeRequestDiscussionOptions(got, want); diff != "" {
 					t.Error(diff)
 				}
 			default:
@@ -486,4 +487,13 @@ func buildTestComment(message string, suggestions []*rdf.Suggestion) *reviewdog.
 			},
 		},
 	}
+}
+
+func diffCreateMergeRequestDiscussionOptions(got, want *gitlab.CreateMergeRequestDiscussionOptions) string {
+	// Replace __reviewdog__ comment so that the test pass regardless of environments.
+	// Proto serialization is not canonical, and test could break unless
+	// replacing the metacomment string.
+	metaCommentRe := regexp.MustCompile(`__reviewdog__:\S+`)
+	got.Body = gitlab.Ptr(metaCommentRe.ReplaceAllString(*got.Body, `__reviewdog__:xxxxxxxxxx`))
+	return cmp.Diff(got, want)
 }

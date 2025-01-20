@@ -92,7 +92,9 @@ func (g *MergeRequestDiscussionCommenter) createPostedComments() (commentutil.Po
 			if pos == nil || pos.NewPath == "" || pos.NewLine == 0 || note.Body == "" {
 				continue
 			}
-			postedcs.AddPostedComment(pos.NewPath, pos.NewLine, note.Body)
+			if meta := commentutil.ExtractMetaComment(note.Body); meta != nil {
+				postedcs.AddPostedComment(pos.NewPath, pos.NewLine, meta.GetFingerprint())
+			}
 		}
 	}
 	return postedcs, nil
@@ -113,13 +115,13 @@ func (g *MergeRequestDiscussionCommenter) postCommentsForEach(ctx context.Contex
 		c := c
 		loc := c.Result.Diagnostic.GetLocation()
 		lnum := int(loc.GetRange().GetStart().GetLine())
-		body := commentutil.MarkdownComment(c)
-
-		if suggestion := buildSuggestions(c); suggestion != "" {
-			body = body + "\n\n" + suggestion
+		fprint, err := commentutil.Fingerprint(c.Result.Diagnostic)
+		if err != nil {
+			return err
 		}
+		body := buildBody(c, fprint)
 
-		if !c.Result.InDiffFile || lnum == 0 || postedcs.IsPosted(c, lnum, body) {
+		if !c.Result.InDiffFile || lnum == 0 || postedcs.IsPosted(c, lnum, fprint) {
 			continue
 		}
 		eg.Go(func() error {
@@ -166,6 +168,15 @@ func listAllMergeRequestDiscussion(cli *gitlab.Client, projectID string, mergeRe
 		return nil, err
 	}
 	return append(discussions, restDiscussions...), nil
+}
+
+func buildBody(c *reviewdog.Comment, fprint string) string {
+	body := commentutil.MarkdownComment(c)
+	if suggestion := buildSuggestions(c); suggestion != "" {
+		body = body + "\n\n" + suggestion
+	}
+	body += commentutil.MetaCommentTag(fprint, c.ToolName)
+	return body
 }
 
 // creates diff in markdown for suggested changes
